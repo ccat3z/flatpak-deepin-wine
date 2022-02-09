@@ -1,0 +1,23 @@
+diff --color -ur ../udis86-1.7.2/scripts/ud_opcode.py ./scripts/ud_opcode.py
+--- ../udis86-1.7.2/scripts/ud_opcode.py	2013-09-02 12:16:37.000000000 +0800
++++ ./scripts/ud_opcode.py	2022-02-09 17:42:29.830967064 +0800
+@@ -130,8 +130,8 @@
+             '/mod'   : lambda v: '00' if v == '!11' else '01',
+             # Mode extensions:
+             # (16, 32, 64) => (00, 01, 02)
+-            '/o'     : lambda v: "%02x" % (int(v) / 32),
+-            '/a'     : lambda v: "%02x" % (int(v) / 32),
++            '/o'     : lambda v: "%02x" % int(int(v) / 32),
++            '/a'     : lambda v: "%02x" % int(int(v) / 32),
+             '/m'     : lambda v: '00' if v == '!64' else '01',
+             # SSE
+             '/sse'   : lambda v: UdOpcodeTables.OpcExtIndex['sse'][v],
+@@ -227,7 +227,7 @@
+ 
+     def print_table( self, table, pfxs ):
+         print("%s   |" % pfxs)
+-        keys = table[ 'entries' ].keys()
++        keys = list(table[ 'entries' ].keys())
+         if ( len( keys ) ):
+             keys.sort()
+         for idx in keys:

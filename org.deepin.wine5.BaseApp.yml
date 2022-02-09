@@ -1,0 +1,152 @@
+app-id: org.deepin.wine5.BaseApp
+branch: stable
+runtime: org.freedesktop.Platform
+runtime-version: '21.08'
+sdk: org.freedesktop.Sdk
+separate-locales: false
+command: /usr/bin/bash
+
+add-extensions:
+  org.freedesktop.Platform.Compat.i386:
+    directory: lib/i386-linux-gnu
+    version: '21.08'
+  org.gnome.Platform.Compat.i386.Debug:
+    directory: lib/debug/lib/i386-linux-gnu
+    version: '21.08'
+    no-autodownload: true
+  org.freedesktop.Platform.GL32:
+    directory: lib/i386-linux-gnu/GL
+    version: '1.4'
+    versions: 21.08;1.4
+    subdirectories: true
+    no-autodownload: false
+    autodelete: false
+    add-ld-path: lib
+    merge-dirs: vulkan/icd.d;glvnd/egl_vendor.d;OpenCL/vendors;lib/dri;lib/d3d;vulkan/explicit_layer.d;vulkan/implicit_layer.d
+    download-if: active-gl-driver
+    enable-if: active-gl-driver
+
+sdk-extensions:
+- org.freedesktop.Sdk.Compat.i386
+- org.freedesktop.Sdk.Extension.toolchain-i386
+
+finish-args:
+- --share=ipc
+- --socket=x11
+- --share=network
+- --socket=pulseaudio
+- --allow=multiarch
+- --allow=devel
+- --talk-name=org.freedesktop.Notifications
+- --talk-name=org.gnome.Mutter.DisplayConfig
+- --talk-name=org.freedesktop.Flatpak
+- --persist=.deepinwine
+- --device=all
+
+x-compat-i386-build-options: &compat-i386-build-options
+  prepend-pkg-config-path: /app/lib32/pkgconfig:/usr/lib/i386-linux-gnu/pkgconfig
+  ldflags: -L/app/lib32
+  prepend-path: /usr/lib/sdk/toolchain-i386/bin
+  env:
+    CC: i686-unknown-linux-gnu-gcc
+    CXX: i686-unknown-linux-gnu-g++
+  libdir: /app/lib32
+
+modules:
+- name: bundle-setup
+  buildsystem: simple
+  build-commands:
+  - mkdir -p /app/lib/i386-linux-gnu
+  - mkdir -p /app/lib/debug/lib/i386-linux-gnu
+  - mkdir -p /app/lib/i386-linux-gnu/GL
+  - install -Dm644 ld.so.conf /app/etc/ld.so.conf
+  sources:
+  - type: file
+    path: ld.so.conf
+- name: glu-32bit
+  build-options: *compat-i386-build-options
+  config-opts: 
+  - --disable-static
+  sources: 
+  - type: archive
+    url: "https://mesa.freedesktop.org/archive/glu/glu-9.0.1.tar.xz"
+    sha256: fb5a4c2dd6ba6d1c21ab7c05129b0769544e1d68e1e3b0ffecb18e73c93055bc  
+- name: vkd3d-32bit
+  config-opts: 
+  - --disable-static
+  - --enable-shared  
+  build-options: *compat-i386-build-options
+  sources: 
+  - type: archive
+    url: https://dl.winehq.org/vkd3d/source/vkd3d-1.2.tar.xz
+    sha256: b04b030fcbf0f2dacc933c76c74b449bffef1fc1a18d50254ef1ad3e380df96b
+  modules:
+  - name: SPIRV-Headers-32bit
+    buildsystem: cmake-ninja
+    build-options: *compat-i386-build-options
+    sources:
+    - type: archive
+      url: https://github.com/KhronosGroup/SPIRV-Headers/archive/refs/tags/1.5.4.raytracing.fixed.tar.gz
+      sha256: df2ad2520be4d95a479fa248921065885bbf435a658349a7fc164ad7b26b68c6
+- name: p7zip
+  buildsystem: simple
+  build-commands:
+  - make 7z 7zr 7za -j8
+  - make install DEST_HOME=/app
+  sources:
+  - type: archive
+    url: https://github.com/jinfeihan57/p7zip/archive/refs/tags/v17.04.tar.gz
+    sha256: ea029a2e21d2d6ad0a156f6679bd66836204aa78148a4c5e498fe682e77127ef
+- name: udis86-32bit
+  build-options: *compat-i386-build-options
+  config-opts: 
+  - --disable-static
+  - --enable-shared  
+  sources: 
+  - type: archive
+    url: https://github.com/vmt/udis86/archive/refs/tags/v1.7.2.tar.gz
+    sha256: 43567f7e12168943c5b5ffb3d3f5b7a33cb36328f8938a993458f3ded0ba5779
+  - type: patch
+    path: patch/udis86-python3.patch
+- name: deepin-wine
+  buildsystem: simple
+  build-commands:
+  - ar -x deepin-wine5.deb data.tar.xz
+  - tar -xf data.tar.xz -C /app --strip-components=2 # strip ./usr/
+  sources:
+  - type: file
+    dest-filename: deepin-wine5.deb
+    url: https://community-store-packages.deepin.com/appstore/pool/appstore/d/deepin-wine5/deepin-wine5_5.0.16-1_i386.deb
+    sha256: c50f7095baa3c8f9ff330ad5215c439362a8f3e0f7621a20ecea0890e9e3c621
+- name: deepin-wine-32bit
+  buildsystem: simple
+  build-commands:
+  - ar -x deepin-wine5-i386.deb data.tar.xz
+  - tar -xf data.tar.xz -C /app --strip-components=2 # strip ./usr/
+  - mv /app/lib/i386-linux-gnu/deepin-wine5 /app/lib32/deepin-wine5
+  - rm /app/bin/deepin5-*
+  - printf '/app/lib32/deepin-wine5\x00' | dd conv=notrunc of="/app/lib32/deepin-wine5/libwine.so.1.0" bs=1 seek=$((0xD1B4))
+  - printf '../../share/deepin-wine5/wine\x00' | dd conv=notrunc of="/app/lib32/deepin-wine5/libwine.so.1.0" bs=1 seek=$((0xD1DC))
+  - sed -i 's#/usr/lib/i386-linux-gnu/deepin-wine5#/app/lib32/deepin-wine5#g' /app/bin/deepin-winegcc32
+  - sed -i 's#bindir=/usr/lib#bindir=/app/lib#g' /app/bin/deepin-wine5
+  sources:
+  - type: file
+    dest-filename: deepin-wine5-i386.deb
+    url: https://community-store-packages.deepin.com/appstore/pool/appstore/d/deepin-wine5/deepin-wine5-i386_5.0.16-1_i386.deb
+    sha256: ea3f354438483a0f8f48e015905bc52a41a06d6ff27910c8b71f22f7fb223bdf
+- name: deepin-wine-helper
+  buildsystem: simple
+  build-commands:
+  - ar -x deepin-wine-helper.deb data.tar.xz
+  - tar -xf data.tar.xz -C /app ./opt
+  - tar -xf data.tar.xz -C /app --strip-components=2 ./usr
+  - sed -i 's#/opt#/app/opt#g' /app/opt/deepinwine/tools/*
+  sources:
+  - type: file
+    dest-filename: deepin-wine-helper.deb
+    url: https://home-store-packages.uniontech.com/appstore/pool/appstore/d/deepin-wine-helper/deepin-wine-helper_5.1.27-1_i386.deb
+    sha256: 36877014ccef4914bb24be36f6309e67e30fbd22d49434d505f4259c7f1fb579
+
+cleanup:
+- '*.la'
+- '*.a'
